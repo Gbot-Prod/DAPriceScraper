@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import statistics
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -68,7 +68,7 @@ class PriceReport(Base):
     covered_markets_cnt: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     parsed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     parser_version: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -100,7 +100,7 @@ class Commodity(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -130,7 +130,7 @@ class CommodityAlias(Base):
     alias_note: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -323,7 +323,7 @@ class DatabaseRepository:
                     existing_report.covered_markets = json.dumps(report.covered_markets)
                     existing_report.covered_markets_cnt = len(report.covered_markets)
                     existing_report.parser_version = report.parser_version
-                    existing_report.parsed_at = datetime.now(timezone.utc)
+                    existing_report.parsed_at = datetime.now(UTC)
                     if source_url:
                         existing_report.source_url = source_url
 
@@ -344,7 +344,7 @@ class DatabaseRepository:
                         covered_markets=json.dumps(report.covered_markets),
                         covered_markets_cnt=len(report.covered_markets),
                         parser_version=report.parser_version,
-                        parsed_at=datetime.now(timezone.utc),
+                        parsed_at=datetime.now(UTC),
                     )
                     session.add(db_report)
                     session.flush()
@@ -380,7 +380,7 @@ class DatabaseRepository:
                             unit=item.unit,
                             canonical_key=item.canonical_key,
                             is_active=True,
-                            created_at=datetime.now(timezone.utc),
+                            created_at=datetime.now(UTC),
                         )
                         session.add(new_comm)
                         session.flush()
@@ -714,7 +714,7 @@ class DatabaseRepository:
             session.add(JobRun(
                 job_name=job_name,
                 started_at=started_at,
-                finished_at=datetime.now(timezone.utc),
+                finished_at=datetime.now(UTC),
                 succeeded=succeeded,
                 detail=detail,
             ))

@@ -108,6 +108,18 @@ class TestRateLimitMiddleware:
         finally:
             repo.close()
 
+    def test_site_pages_and_assets_are_exempt(self, tmp_path: Path):
+        client, repo = self._client(tmp_path, per_minute=1)
+        try:
+            for _ in range(3):
+                for path in ("/", "/api-docs", "/static/site.css", "/docs", "/openapi.json"):
+                    assert client.get(path).status_code == 200, path
+            # Data endpoints are still limited
+            assert client.get("/commodities").status_code == 200
+            assert client.get("/commodities").status_code == 429
+        finally:
+            repo.close()
+
     def test_429_carries_cors_headers(self, tmp_path: Path):
         client, repo = self._client(tmp_path, per_minute=1)
         try:

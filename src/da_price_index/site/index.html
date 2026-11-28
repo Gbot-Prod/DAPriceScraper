@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DAPriceScraper · Philippine Food Price API</title>
+  <meta name="description" content="Free, open API for daily prevailing retail prices of Philippine food commodities, parsed from the Department of Agriculture's Daily Price Index. JSON or CSV, no sign-up.">
+  <meta property="og:title" content="DAPriceScraper · Philippine Food Price API">
+  <meta property="og:description" content="Daily retail prices for rice, meat, fish, vegetables and more from Metro Manila public markets. Free, no sign-up, JSON or CSV.">
+  <meta name="theme-color" content="#1d6b47">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="DAPriceScraper home">
+        <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--brand)"/><path d="M9 22c0-7.5 5-12 14-13-.6 8.6-5.2 13.4-12.4 13.4L9 24" fill="none" stroke="var(--on-brand)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 19l5-5" stroke="var(--on-brand)" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span>DAPriceScraper</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="/api-docs">Docs</a>
+        <a href="/docs">Try it</a>
+        <a href="https://github.com/Gbot-Prod/DAPriceScraper">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div class="eyebrow"><span class="dot"></span>Open source · Free · No API key</div>
+        <h1>Philippine food prices, <em>as an API</em>.</h1>
+        <p class="lede">Daily prevailing retail prices for rice, meat, fish, vegetables and other basic commodities from Metro Manila public markets. Parsed automatically from the Department of Agriculture's Daily Price Index and served as clean JSON or CSV.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/api-docs">Read the docs</a>
+          <a class="btn btn-ghost" href="#quick-start">Quick start</a>
+          <a class="btn btn-ghost" href="/docs">Try it live</a>
+        </div>
+
+        <div class="stats" aria-label="Latest data">
+          <div class="stat"><div class="stat-value" id="stat-date"></div><div class="stat-label">Latest report</div></div>
+          <div class="stat"><div class="stat-value" id="stat-commodities"></div><div class="stat-label">Commodities priced</div></div>
+          <div class="stat"><div class="stat-value" id="stat-categories"></div><div class="stat-label">Categories</div></div>
+          <div class="stat"><div class="stat-value" id="stat-markets"></div><div class="stat-label">Markets surveyed</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="prices" style="padding-top: 24px;">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Today's prices</h2>
+          <p>Live from <code>GET /prices/latest</code>. Every number on this table is what the API returns.</p>
+        </div>
+        <div class="card explorer" id="explorer">
+          <div class="explorer-bar">
+            <label class="visually-hidden" for="ex-search">Search commodities</label>
+            <input class="field" id="ex-search" type="search" placeholder="Search: galunggong, liempo, onion…" autocomplete="off">
+            <label class="visually-hidden" for="ex-category">Category</label>
+            <select class="field" id="ex-category"><option value="">All categories</option></select>
+            <span class="as-of" id="ex-asof"></span>
+          </div>
+          <div class="table-scroll">
+            <table class="prices">
+              <thead>
+                <tr>
+                  <th scope="col">Commodity</th>
+                  <th scope="col" class="col-spec">Specification</th>
+                  <th scope="col" class="col-cat">Category</th>
+                  <th scope="col" class="num">Prevailing price</th>
+                </tr>
+              </thead>
+              <tbody id="ex-body"></tbody>
+            </table>
+            <div class="explorer-empty" id="ex-empty" hidden>No commodities match your search.</div>
+          </div>
+          <div class="explorer-foot">
+            <span id="ex-count">Loading live prices…</span>
+            <span><a href="/prices/latest?format=csv">Download as CSV</a> · <a href="/prices/latest">View JSON</a></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Built to be easy to depend on</h2>
+          <p>The DA publishes prices as PDFs. This API does the tedious part: finding each new report, parsing every table, checking the numbers, and keeping a clean history.</p>
+        </div>
+        <div class="features">
+          <div class="card feature">
+            <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg></div>
+            <h3>No sign-up</h3>
+            <p>No API keys, no accounts. Plain <code>GET</code> requests with CORS open to any origin, so it works straight from the browser.</p>
+          </div>
+          <div class="card feature">
+            <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div>
+            <h3>JSON or CSV</h3>
+            <p>Every price endpoint speaks both. Add <code>?format=csv</code> and open it in Excel or Google Sheets.</p>
+          </div>
+          <div class="card feature">
+            <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/></svg></div>
+            <h3>History and price bands</h3>
+            <p>Time series per commodity, plus min, max, median and latest price over any window of up to a year.</p>
+          </div>
+          <div class="card feature">
+            <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <h3>Validated and traceable</h3>
+            <p>Large day-over-day jumps are flagged, and every price links back to the exact DA report and file checksum it came from.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="quick-start">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Quick start</h2>
+          <p>Get today's prevailing prices in one request.</p>
+        </div>
+        <div class="code-card" data-tabs>
+          <div class="code-head" role="tablist" aria-label="Language">
+            <button class="tab" role="tab" data-lang="curl" aria-selected="true">cURL</button>
+            <button class="tab" role="tab" data-lang="js" aria-selected="false" tabindex="-1">JavaScript</button>
+            <button class="tab" role="tab" data-lang="python" aria-selected="false" tabindex="-1">Python</button>
+            <button class="copy" type="button">Copy</button>
+          </div>
+          <div class="panel" data-lang="curl"><pre><code>curl "<span data-base>https://your-host</span>/prices/latest?available_only=true"
+
+<span class="tok-c"># Same data as a spreadsheet</span>
+curl "<span data-base>https://your-host</span>/prices/latest?format=csv" -o prices.csv</code></pre></div>
+          <div class="panel" data-lang="js" hidden><pre><code><span class="tok-k">const</span> res = <span class="tok-k">await</span> fetch(<span class="tok-s">"<span data-base>https://your-host</span>/prices/latest?available_only=true"</span>);
+<span class="tok-k">const</span> { as_of_date, items } = <span class="tok-k">await</span> res.json();
+
+<span class="tok-k">for</span> (<span class="tok-k">const</span> item <span class="tok-k">of</span> items) {
+  console.log(item.commodity_name, item.specification, item.price_prevailing, item.unit);
+}</code></pre></div>
+          <div class="panel" data-lang="python" hidden><pre><code><span class="tok-k">import</span> requests
+
+res = requests.get(<span class="tok-s">"<span data-base>https://your-host</span>/prices/latest"</span>, params={<span class="tok-s">"available_only"</span>: <span class="tok-k">True</span>})
+res.raise_for_status()
+data = res.json()
+
+<span class="tok-k">for</span> item <span class="tok-k">in</span> data[<span class="tok-s">"items"</span>]:
+    print(item[<span class="tok-s">"commodity_name"</span>], item[<span class="tok-s">"price_prevailing"</span>], item[<span class="tok-s">"unit"</span>])</code></pre></div>
+        </div>
+        <p class="muted" style="margin-top: 16px;">Next: browse every endpoint in the <a href="/api-docs">API docs</a>, or call them from your browser in the <a href="/docs">interactive explorer</a>.</p>
+      </div>
+    </section>
+
+    <section class="section" id="ai" style="padding-top: 0;">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Ask your AI assistant</h2>
+          <p>DAPriceScraper is also an <a href="https://modelcontextprotocol.io">MCP</a> server. Add one URL to Claude, Cursor or VS Code and ask about prices in plain language: <em>"How much is local galunggong today?"</em> or <em>"Has rice gotten more expensive this month?"</em></p>
+        </div>
+        <div class="code-card">
+          <div class="code-head"><span class="code-label">MCP server URL</span><button class="copy" type="button">Copy</button></div>
+          <pre><code><span data-base>https://your-host</span>/mcp</code></pre>
+        </div>
+        <p class="muted" style="margin-top: 16px;">Setup steps for each assistant and the full tool list are in the <a href="/api-docs#mcp">MCP docs</a>.</p>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Frequently asked questions</h2>
+        </div>
+        <div class="faq">
+          <details class="card">
+            <summary>Is this official Department of Agriculture data?</summary>
+            <div class="answer">
+              <p>The prices come from the DA's own Daily Price Index reports, but this is an independent, community project. It isn't affiliated with or endorsed by the DA. For anything official, check the <a href="https://www.da.gov.ph/price-monitoring/">original reports on the DA website</a>. Every price in the API links back to the report it came from through <code>/reports/{date}</code>.</p>
+            </div>
+          </details>
+          <details class="card">
+            <summary>How often is the data updated?</summary>
+            <div class="answer">
+              <p>The DA publishes one Daily Price Index per day. A scheduled sync job (twice a day by default) picks up each new report shortly after it's published. The <code>/health</code> endpoint tells you the latest report date.</p>
+            </div>
+          </details>
+          <details class="card">
+            <summary>Which areas are covered?</summary>
+            <div class="answer">
+              <p>The National Capital Region (Metro Manila). Each report surveys around 30 public markets; <code>/reports/{date}</code> lists exactly which ones. Endpoints take a <code>region</code> parameter so other regions can be added later.</p>
+            </div>
+          </details>
+          <details class="card">
+            <summary>What does "prevailing price" mean?</summary>
+            <div class="answer">
+              <p>It's the price most commonly observed across the surveyed markets for that commodity on that day, as reported by the DA. If a commodity wasn't available in the markets that day, the API returns <code>"is_available": false</code> and <code>"price_prevailing": null</code>.</p>
+            </div>
+          </details>
+          <details class="card">
+            <summary>Are there rate limits?</summary>
+            <div class="answer">
+              <p>Yes, to keep it free for everyone: 60 requests per minute, 1,000 per hour and 5,000 per day per IP address. That's plenty, since prices change once a day. Responses support ETag caching, so repeat requests for unchanged data are cheap. If you need more, self-host it.</p>
+            </div>
+          </details>
+          <details class="card">
+            <summary>Can I host my own copy?</summary>
+            <div class="answer">
+              <p>Yes. It's MIT licensed and ships as a single Docker image that runs both the API and the daily sync job, with SQLite or PostgreSQL. See <a href="/api-docs#self-hosting">self-hosting</a> in the docs.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <p><strong style="color: var(--ink);">DAPriceScraper</strong> is an independent open-source project and is not affiliated with the Philippine Department of Agriculture. Price data belongs to its original publisher; always treat the <a href="https://www.da.gov.ph/price-monitoring/">DA's reports</a> as the authoritative source.</p>
+        <p style="margin: 0;">Released under the <a href="https://github.com/Gbot-Prod/DAPriceScraper/blob/main/LICENSE">MIT License</a>.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="/api-docs">API docs</a>
+        <a href="/docs">Interactive explorer</a>
+        <a href="/openapi.json">OpenAPI spec</a>
+        <a href="/health">Status</a>
+        <a href="https://github.com/Gbot-Prod/DAPriceScraper">GitHub</a>
+        <a href="https://github.com/Gbot-Prod/DAPriceScraper/issues">Report an issue</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="/static/site.js"></script>
+</body>
+</html>

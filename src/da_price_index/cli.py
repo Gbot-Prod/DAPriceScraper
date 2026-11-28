@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
@@ -310,21 +310,29 @@ def run_daily(
     Exits with code 1 on failure.
     """
     rprint("[bold blue]Starting daily DA Price Index sync job...[/bold blue]")
-    started_at = datetime.now(timezone.utc)
-    repo = DatabaseRepository(db_url=db_url or settings.db_url)
+    started_at = datetime.now(UTC)
+
+    def _database_unavailable(e: Exception) -> typer.Exit:
+        # Without the database the failure streak can't be tracked, and the
+        # API can't be serving fresh data either -- alert right away.
+        rprint(f"[bold red]Database unavailable:[/bold red] {e}")
+        send_alert(
+            f":rotating_light: DA Price Index daily sync could not reach the database: {e}"
+        )
+        return typer.Exit(code=1)
+
+    try:
+        # Engine creation imports the DB driver, so a missing driver lands here too.
+        repo = DatabaseRepository(db_url=db_url or settings.db_url)
+    except Exception as e:
+        raise _database_unavailable(e) from e
 
     try:
         try:
             repo.create_tables()
             previous_streak = repo.count_consecutive_failures(DAILY_JOB_NAME)
         except Exception as e:
-            # Without the database the failure streak can't be tracked, and the
-            # API can't be serving fresh data either -- alert right away.
-            rprint(f"[bold red]Database unavailable:[/bold red] {e}")
-            send_alert(
-                f":rotating_light: DA Price Index daily sync could not reach the database: {e}"
-            )
-            raise typer.Exit(code=1) from e
+            raise _database_unavailable(e) from e
 
         try:
             outcome = _run_sync(repo, None, limit=3)

@@ -1,43 +1,47 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=84.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "DAPriceScraper"
-version = "0.1.0"
+version = "1.0.0"
 description = "Philippine DA Daily Price Index scraper, parser, and database ingestion pipeline"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Gbot-Prod" }]
 
 dependencies = [
-    "httpx>=0.27",
-    "beautifulsoup4>=4.12",
-    "tenacity>=8.2",
-    "pdfplumber>=0.11",
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "sqlalchemy>=2.0",
-    "typer>=0.12",
-    "rich>=13.0",
-    "fastapi>=0.115",
-    "uvicorn>=0.30",
+    "httpx>=0.29",
+    "beautifulsoup4>=4.15",
+    "tenacity>=9.2",
+    "pdfplumber>=0.11.11",
+    "pydantic>=2.14",
+    "pydantic-settings>=2.16",
+    "sqlalchemy>=2.1",
+    "typer>=0.29",
+    "rich>=15.0",
+    "fastapi>=0.165",
+    "uvicorn>=0.54",
+    "mcp>=2.3,<3",
 ]
 
 [project.optional-dependencies]
-postgres = ["psycopg[binary]>=3.1"]
+postgres = ["psycopg[binary]>=3.3"]
 dev = [
-    "pytest>=8.0",
-    "respx>=0.21",
-    "ruff>=0.4",
+    "pytest>=9.2",
+    "respx>=0.23",
+    "ruff>=0.17",
 ]
 
 [project.scripts]
 da-dpi = "da_price_index.cli:app"
 
+[tool.setuptools.package-data]
+da_price_index = ["site/*"]
+
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]

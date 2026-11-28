@@ -7,9 +7,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path("src").resolve()))
 sys.path.insert(0, str(Path("tests").resolve()))
 
-from test_api import TestAPI, TestPriceSummary
+from test_api import TestAPI, TestPriceSummary, TestSite
 from test_cli import TestCLI
 from test_db import TestDatabaseRepository, TestExporters, TestReportDateCorrection
+from test_mcp import TestMCP
 from test_parser import TestDPIParser, TestReportDateReconciliation
 from test_ratelimit import TestRateLimiter, TestRateLimitMiddleware
 from test_run_daily import TestDbUrlNormalization, TestRunDaily
@@ -36,6 +37,8 @@ def run_all():
         ("TestCLI", TestCLI),
         ("TestAPI", TestAPI),
         ("TestPriceSummary", TestPriceSummary),
+        ("TestSite", TestSite),
+        ("TestMCP", TestMCP),
         ("TestRateLimiter", TestRateLimiter),
         ("TestRateLimitMiddleware", TestRateLimitMiddleware),
         ("TestRunDaily", TestRunDaily),

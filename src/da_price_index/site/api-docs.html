@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API Docs · DAPriceScraper</title>
+  <meta name="description" content="Reference for the DAPriceScraper API: endpoints, parameters, example requests and responses for Philippine daily food commodity prices.">
+  <meta name="theme-color" content="#1d6b47">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="DAPriceScraper home">
+        <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--brand)"/><path d="M9 22c0-7.5 5-12 14-13-.6 8.6-5.2 13.4-12.4 13.4L9 24" fill="none" stroke="var(--on-brand)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 19l5-5" stroke="var(--on-brand)" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span>DAPriceScraper</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="/api-docs" aria-current="page">Docs</a>
+        <a href="/docs">Try it</a>
+        <a href="https://github.com/Gbot-Prod/DAPriceScraper">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap docs">
+    <details class="docs-nav" open>
+      <summary>On this page</summary>
+      <h4>Getting started</h4>
+      <ul>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#rate-limits">Rate limits</a></li>
+        <li><a href="#caching">Caching</a></li>
+        <li><a href="#errors">Errors</a></li>
+      </ul>
+      <h4>Endpoints</h4>
+      <ul>
+        <li><a href="#latest"><code>/prices/latest</code></a></li>
+        <li><a href="#summary"><code>/prices/summary</code></a></li>
+        <li><a href="#history"><code>/prices</code></a></li>
+        <li><a href="#commodities"><code>/commodities</code></a></li>
+        <li><a href="#reports"><code>/reports/{date}</code></a></li>
+        <li><a href="#health"><code>/health</code></a></li>
+      </ul>
+      <h4>AI assistants</h4>
+      <ul>
+        <li><a href="#mcp">MCP server</a></li>
+      </ul>
+      <h4>Guides</h4>
+      <ul>
+        <li><a href="#csv">CSV export</a></li>
+        <li><a href="#data-notes">Understanding the data</a></li>
+        <li><a href="#self-hosting">Self-hosting</a></li>
+        <li><a href="#changelog">Changelog</a></li>
+      </ul>
+    </details>
+
+    <main class="docs-main">
+      <section id="overview">
+        <h1 style="font-size: clamp(1.9rem, 3vw + 0.8rem, 2.6rem);">API reference</h1>
+        <p class="lede">A read-only REST API for daily prevailing retail prices of Philippine food commodities, parsed from the Department of Agriculture's Daily Price Index.</p>
+
+        <h3>Base URL</h3>
+        <div class="code-card">
+          <div class="code-head"><span class="code-label">Base URL</span><button class="copy" type="button">Copy</button></div>
+          <pre><code><span data-base>https://your-host</span></code></pre>
+        </div>
+
+        <h3>The basics</h3>
+        <ul>
+          <li><strong>No authentication.</strong> Every REST endpoint is a public <code>GET</code>. CORS allows any origin, so you can call it from browser JavaScript.</li>
+          <li><strong>JSON by default, CSV on request.</strong> Price endpoints return CSV when you add <code>?format=csv</code> or send <code>Accept: text/csv</code>.</li>
+          <li><strong>Prices are decimal strings</strong>, like <code>"174.00"</code>, so they never pick up floating-point rounding errors. Parse them with a decimal type if you do arithmetic on money.</li>
+          <li><strong>Dates</strong> are ISO 8601 (<code>YYYY-MM-DD</code>) and refer to the report date printed on the DA's PDF.</li>
+          <li><strong>Region.</strong> Data currently covers the National Capital Region. Endpoints accept <code>region=NCR</code>, which is also the default.</li>
+        </ul>
+        <div class="callout">
+          <p><strong>Unofficial project.</strong> This API isn't affiliated with the Department of Agriculture. Treat the <a href="https://www.da.gov.ph/price-monitoring/">original DA reports</a> as the authoritative source.</p>
+        </div>
+      </section>
+
+      <section id="rate-limits">
+        <h2>Rate limits</h2>
+        <p>Limits apply per client IP address. <code>/health</code> and the website pages don't count.</p>
+        <div class="table-wrap">
+          <table class="ref">
+            <thead><tr><th>Window</th><th>Requests allowed</th></tr></thead>
+            <tbody>
+              <tr><td>Per minute</td><td>60</td></tr>
+              <tr><td>Per hour</td><td>1,000</td></tr>
+              <tr><td>Per day</td><td>5,000</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Over the limit, the API returns <code>429 Too Many Requests</code> with a <code>Retry-After</code> header giving the number of seconds to wait. Prices change once a day, so caching responses on your side (see below) keeps you well within the limits.</p>
+      </section>
+
+      <section id="caching">
+        <h2>Caching</h2>
+        <p><code>/prices/latest</code> and <code>/prices/summary</code> send an <code>ETag</code> and a <code>Cache-Control</code> header. Send the ETag back in <code>If-None-Match</code>, and if nothing has changed you get an empty <code>304 Not Modified</code> instead of the full payload.</p>
+        <div class="code-card">
+          <div class="code-head"><span class="code-label">Conditional request</span><button class="copy" type="button">Copy</button></div>
+          <pre><code>curl -i "<span data-base>https://your-host</span>/prices/latest" \
+  -H 'If-None-Match: W/"3f9a1c0e2b7d4a65"'
+
+<span class="tok-c"># HTTP/1.1 304 Not Modified</span></code></pre>
+        </div>
+      </section>
+
+      <section id="errors">
+        <h2>Errors</h2>
+        <p>Errors return a JSON body with a <code>detail</code> message:</p>
+        <div class="code-card">
+          <div class="code-head"><span class="code-label">404 Not Found</span></div>
+          <pre><code>{
+  <span class="tok-s">"detail"</span>: <span class="tok-s">"No report found for date '1999-01-01' in region 'NCR'"</span>
+}</code></pre>
+        </div>
+        <div class="table-wrap">
+          <table class="ref">
+            <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>304</code></td><td>Not modified: your cached copy (matched by ETag) is still current.</td></tr>
+              <tr><td><code>404</code></td><td>Nothing found: unknown commodity ID, a date with no report, or no reports yet for the region.</td></tr>
+              <tr><td><code>422</code></td><td>Invalid parameter, for example a malformed date or <code>days</code> outside 1–366. <code>detail</code> is a list describing each problem.</td></tr>
+              <tr><td><code>429</code></td><td>Rate limit exceeded. Wait for the number of seconds in <code>Retry-After</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="endpoints-section">
+        <h2>Endpoints</h2>
+
+        <!-- /prices/latest -->
+        <article class="endpoint" id="latest">
+          <div class="endpoint-title"><span class="method">GET</span><h3>/prices/latest</h3><span class="tag">JSON · CSV</span></div>
+          <p>The most recent known prevailing price for every commodity. The <code>as_of_date</code> is the latest report; a commodity that was missing from that report keeps its last known price and its own <code>report_date</code>.</p>
+          <div class="table-wrap">
+            <table class="ref">
+              <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>region</code></td><td>string</td><td><code>NCR</code></td><td>Region code.</td></tr>
+                <tr><td><code>commodity_id</code></td><td>integer, repeatable</td><td>all</td><td>Limit to specific commodities: <code>?commodity_id=1&amp;commodity_id=14</code>.</td></tr>
+                <tr><td><code>available_only</code></td><td>boolean</td><td><code>false</code></td><td>Drop commodities that weren't available in the markets (<code>price_prevailing</code> is <code>null</code>).</td></tr>
+                <tr><td><code>format</code></td><td>string</td><td><code>json</code></td><td><code>json</code> or <code>csv</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="code-card" data-tabs>
+            <div class="code-head" role="tablist" aria-label="Language">
+              <button class="tab" role="tab" data-lang="curl" aria-selected="true">cURL</button>
+              <button class="tab" role="tab" data-lang="js" aria-selected="false" tabindex="-1">JavaScript</button>
+              <button class="tab" role="tab" data-lang="python" aria-selected="false" tabindex="-1">Python</button>
+              <button class="copy" type="button">Copy</button>
+            </div>
+            <div class="panel" data-lang="curl"><pre><code>curl "<span data-base>https://your-host</span>/prices/latest?available_only=true"</code></pre></div>
+            <div class="panel" data-lang="js" hidden><pre><code><span class="tok-k">const</span> res = <span class="tok-k">await</span> fetch(<span class="tok-s">"<span data-base>https://your-host</span>/prices/latest?available_only=true"</span>);
+<span class="tok-k">const</span> data = <span class="tok-k">await</span> res.json();</code></pre></div>
+            <div class="panel" data-lang="python" hidden><pre><code><span class="tok-k">import</span> requests
+
+data = requests.get(
+    <span class="tok-s">"<span data-base>https://your-host</span>/prices/latest"</span>,
+    params={<span class="tok-s">"available_only"</span>: <span class="tok-k">True</span>},
+).json()</code></pre></div>
+          </div>
+          <details class="response" open>
+            <summary>Example response</summary>
+            <div class="code-card"><pre><code>{
+  <span class="tok-s">"region_code"</span>: <span class="tok-s">"NCR"</span>,
+  <span class="tok-s">"as_of_date"</span>: <span class="tok-s">"2026-11-25"</span>,
+  <span class="tok-s">"total_commodities"</span>: 254,
+  <span class="tok-s">"items"</span>: [
+    {
+      <span class="tok-s">"price_id"</span>: 938,
+      <span class="tok-s">"commodity_id"</span>: 14,
+      <span class="tok-s">"commodity_name"</span>: <span class="tok-s">"Corn (White)"</span>,
+      <span class="tok-s">"top_category"</span>: <span class="tok-s">"CORN PRODUCTS"</span>,
+      <span class="tok-s">"sub_category"</span>: <span class="tok-k">null</span>,
+      <span class="tok-s">"group_category"</span>: <span class="tok-k">null</span>,
+      <span class="tok-s">"specification"</span>: <span class="tok-s">"Cob, Glutinous"</span>,
+      <span class="tok-s">"unit"</span>: <span class="tok-s">"kg"</span>,
+      <span class="tok-s">"report_date"</span>: <span class="tok-s">"2026-11-25"</span>,
+      <span class="tok-s">"price_prevailing"</span>: <span class="tok-s">"106.67"</span>,
+      <span class="tok-s">"is_available"</span>: <span class="tok-k">true</span>,
+      <span class="tok-s">"raw_price_text"</span>: <span class="tok-s">"106.67"</span>,
+      <span class="tok-s">"quality"</span>: { <span class="tok-s">"drift_flagged"</span>: <span class="tok-k">false</span>, <span class="tok-s">"drift_pct"</span>: <span class="tok-k">null</span> }
+    }
+    <span class="tok-c">// …253 more items</span>
+  ]
+}</code></pre></div>
+          </details>
+        </article>
+
+        <!-- /prices/summary -->
+        <article class="endpoint" id="summary">
+          <div class="endpoint-title"><span class="method">GET</span><h3>/prices/summary</h3><span class="tag">JSON</span></div>
+          <p>A price band for each commodity over a trailing window: minimum, maximum, median and latest prevailing price, with how many days it was observed. The window ends on the latest report date. One call covers every commodity, so you don't need a history request per item.</p>
+          <div class="table-wrap">
+            <table class="ref">
+              <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>days</code></td><td>integer, 1–366</td><td><code>30</code></td><td>Length of the trailing window in days.</td></tr>
+                <tr><td><code>region</code></td><td>string</td><td><code>NCR</code></td><td>Region code.</td></tr>
+                <tr><td><code>commodity_id</code></td><td>integer, repeatable</td><td>all</td><td>Limit to specific commodities.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="code-card" data-tabs>
+            <div class="code-head" role="tablist" aria-label="Language">
+              <button class="tab" role="tab" data-lang="curl" aria-selected="true">cURL</button>
+              <button class="tab" role="tab" data-lang="js" aria-selected="false" tabindex="-1">JavaScript</button>
+              <button class="tab" role="tab" data-lang="python" aria-selected="false" tabindex="-1">Python</button>
+              <button class="copy" type="button">Copy</button>
+            </div>
+            <div class="panel" data-lang="curl"><pre><code>curl "<span data-base>https://your-host</span>/prices/summary?days=7&amp;commodity_id=1&amp;commodity_id=2"</code></pre></div>
+            <div class="panel" data-lang="js" hidden><pre><code><span class="tok-k">const</span> params = <span class="tok-k">new</span> URLSearchParams([[<span class="tok-s">"days"</span>, <span class="tok-s">"7"</span>], [<span class="tok-s">"commodity_id"</span>, <span class="tok-s">"1"</span>], [<span class="tok-s">"commodity_id"</span>, <span class="tok-s">"2"</span>]]);
+<span class="tok-k">const</span> res = <span class="tok-k">await</span> fetch(<span class="tok-s">`<span data-base>https://your-host</span>/prices/summary?${params}`</span>);
+<span class="tok-k">const</span> summary = <span class="tok-k">await</span> res.json();</code></pre></div>
+            <div class="panel" data-lang="python" hidden><pre><code><span class="tok-k">import</span> requests
+
+summary = requests.get(
+    <span class="tok-s">"<span data-base>https://your-host</span>/prices/summary"</span>,
+    params={<span class="tok-s">"days"</span>: 7, <span class="tok-s">"commodity_id"</span>: [1, 2]},
+).json()</code></pre></div>
+          </div>
+          <details class="response" open>
+            <summary>Example response</summary>
+            <div class="code-card"><pre><code>{
+  <span class="tok-s">"region_code"</span>: <span class="tok-s">"NCR"</span>,
+  <span class="tok-s">"days"</span>: 7,
+  <span class="tok-s">"window_start"</span>: <span class="tok-s">"2026-11-19"</span>,
+  <span class="tok-s">"window_end"</span>: <span class="tok-s">"2026-11-25"</span>,
+  <span class="tok-s">"total_commodities"</span>: 2,
+  <span class="tok-s">"items"</span>: [
+    {
+      <span class="tok-s">"commodity_id"</span>: 1,
+      <span class="tok-s">"commodity_name"</span>: <span class="tok-s">"Basmati"</span>,
+      <span class="tok-s">"top_category"</span>: <span class="tok-s">"IMPORTED COMMERCIAL RICE"</span>,
+      <span class="tok-s">"sub_category"</span>: <span class="tok-k">null</span>,
+      <span class="tok-s">"group_category"</span>: <span class="tok-k">null</span>,
+      <span class="tok-s">"specification"</span>: <span class="tok-s">""</span>,
+      <span class="tok-s">"unit"</span>: <span class="tok-s">"kg"</span>,
+      <span class="tok-s">"observations"</span>: 4,
+      <span class="tok-s">"price_min"</span>: <span class="tok-s">"150.00"</span>,
+      <span class="tok-s">"price_max"</span>: <span class="tok-s">"196.00"</span>,
+      <span class="tok-s">"price_median"</span>: <span class="tok-s">"185.00"</span>,
+      <span class="tok-s">"latest_price"</span>: <span class="tok-s">"174.00"</span>,
+      <span class="tok-s">"first_date"</span>: <span class="tok-s">"2026-11-22"</span>,
+      <span class="tok-s">"last_date"</span>: <span class="tok-s">"2026-11-25"</span>
+    }
+    <span class="tok-c">// …1 more item</span>
+  ]
+}</code></pre></div>
+          </details>
+        </article>
+
+        <!-- /prices -->
+        <article class="endpoint" id="history">
+          <div class="endpoint-title"><span class="method">GET</span><h3>/prices</h3><span class="tag">JSON · CSV</span></div>
+          <p>The daily price history of one commodity, oldest first. Returns an empty list for a known commodity with no prices in the range, and <code>404</code> for an unknown ID.</p>
+          <div class="table-wrap">
+            <table class="ref">
+              <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>commodity_id</code><span class="req">required</span></td><td>integer</td><td>—</td><td>The commodity to look up. Find IDs with <a href="#commodities"><code>/commodities</code></a>.</td></tr>
+                <tr><td><code>from</code></td><td>date</td><td>earliest</td><td>Start date, inclusive (<code>YYYY-MM-DD</code>).</td></tr>
+                <tr><td><code>to</code></td><td>date</td><td>latest</td><td>End date, inclusive.</td></tr>
+                <tr><td><code>region</code></td><td>string</td><td><code>NCR</code></td><td>Region code.</td></tr>
+                <tr><td><code>format</code></td><td>string</td><td><code>json</code></td><td><code>json</code> or <code>csv</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="code-card" data-tabs>
+            <div class="code-head" role="tablist" aria-label="Language">
+              <button class="tab" role="tab" data-lang="curl" aria-selected="true">cURL</button>
+              <button class="tab" role="tab" data-lang="js" aria-selected="false" tabindex="-1">JavaScript</button>
+              <button class="tab" role="tab" data-lang="python" aria-selected="false" tabindex="-1">Python</button>
+              <button class="copy" type="button">Copy</button>
+            </div>
+            <div class="panel" data-lang="curl"><pre><code>curl "<span data-base>https://your-host</span>/prices?commodity_id=14&amp;from=2026-11-01&amp;to=2026-11-30"</code></pre></div>
+            <div class="panel" data-lang="js" hidden><pre><code><span class="tok-k">const</span> res = <span class="tok-k">await</span> fetch(<span class="tok-s">"<span data-base>https://your-host</span>/prices?commodity_id=14&amp;from=2026-11-01&amp;to=2026-11-30"</span>);
+<span class="tok-k">const</span> history = <span class="tok-k">await</span> res.json();</code></pre></div>
+            <div class="panel" data-lang="python" hidden><pre><code><span class="tok-k">import</span> requests
+
+history = requests.get(
+    <span class="tok-s">"<span data-base>https://your-host</span>/prices"</span>,
+    params={<span class="tok-s">"commodity_id"</span>: 14, <span class="tok-s">"from"</span>: <span class="tok-s">"2026-11-01"</span>, <span class="tok-s">"to"</span>: <span class="tok-s">"2026-11-30"</span>},
+).json()</code></pre></div>
+          </div>
+          <details class="response">
+            <summary>Example response</summary>
+            <div class="code-card"><pre><code>[
+  {
+    <span class="tok-s">"price_id"</span>: 14,
+    <span class="tok-s">"commodity_id"</span>: 14,
+    <span class="tok-s">"commodity_name"</span>: <span class="tok-s">"Corn (White)"</span>,
+    <span class="tok-s">"top_category"</span>: <span class="tok-s">"CORN PRODUCTS"</span>,
+    <span class="tok-s">"sub_category"</span>: <span class="tok-k">null</span>,
+    <span class="tok-s">"group_category"</span>: <span class="tok-k">null</span>,
+    <span class="tok-s">"specification"</span>: <span class="tok-s">"Cob, Glutinous"</span>,
+    <span class="tok-s">"unit"</span>: <span class="tok-s">"kg"</span>,
+    <span class="tok-s">"report_date"</span>: <span class="tok-s">"2026-11-22"</span>,
+    <span class="tok-s">"price_prevailing"</span>: <span class="tok-s">"100.80"</span>,
+    <span class="tok-s">"is_available"</span>: <span class="tok-k">true</span>,
+    <span class="tok-s">"raw_price_text"</span>: <span class="tok-s">"100.80"</span>,
+    <span class="tok-s">"quality"</span>: { <span class="tok-s">"drift_flagged"</span>: <span class="tok-k">false</span>, <span class="tok-s">"drift_pct"</span>: <span class="tok-k">null</span> }
+  },
+  {
+    <span class="tok-s">"price_id"</span>: 322,
+    <span class="tok-s">"commodity_id"</span>: 14,
+    <span class="tok-s">"report_date"</span>: <span class="tok-s">"2026-11-23"</span>,
+    <span class="tok-s">"price_prevailing"</span>: <span class="tok-s">"105.15"</span>,
+    <span class="tok-c">// …same fields as above</span>
+  }
+]</code></pre></div>
+          </details>
+        </article>
+
+        <!-- /commodities -->
+        <article class="endpoint" id="commodities">
+          <div class="endpoint-title"><span class="method">GET</span><h3>/commodities</h3><span class="tag">JSON</span></div>
+          <p>The commodity catalog, with the stable <code>commodity_id</code> used by every other endpoint. IDs don't change when the DA tweaks a name or layout.</p>
+          <div class="table-wrap">
+            <table class="ref">
+              <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>category</code></td><td>string</td><td>all</td><td>Case-insensitive partial match on the top category, e.g. <code>rice</code>, <code>vegetables</code>, <code>seafood</code>.</td></tr>
+                <tr><td><code>search</code></td><td>string</td><td>—</td><td>Case-insensitive partial match on name, specification or sub-category, e.g. <code>pork</code>, <code>galunggong</code>.</td></tr>
+                <tr><td><code>is_active</code></td><td>boolean</td><td><code>true</code></td><td>Set to <code>false</code> to include retired commodities.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="code-card" data-tabs>
+            <div class="code-head" role="tablist" aria-label="Language">
+              <button class="tab" role="tab" data-lang="curl" aria-selected="true">cURL</button>
+              <button class="tab" role="tab" data-lang="js" aria-selected="false" tabindex="-1">JavaScript</button>
+              <button class="tab" role="tab" data-lang="python" aria-selected="false" tabindex="-1">Python</button>
+              <button class="copy" type="button">Copy</button>
+            </div>
+            <div class="panel" data-lang="curl"><pre><code>curl "<span data-base>https://your-host</span>/commodities?search=pork"</code></pre></div>
+            <div class="panel" data-lang="js" hidden><pre><code><span class="tok-k">const</span> res = <span class="tok-k">await</span> fetch(<span class="tok-s">"<span data-base>https://your-host</span>/commodities?search=pork"</span>);
+<span class="tok-k">const</span> commodities = <span class="tok-k">await</span> res.json();</code></pre></div>
+            <div class="panel" data-lang="python" hidden><pre><code><span class="tok-k">import</span> requests
+
+commodities = requests.get(
+    <span class="tok-s">"<span data-base>https://your-host</span>/commodities"</span>, params={<span class="tok-s">"search"</span>: <span class="tok-s">"pork"</span>}
+).json()</code></pre></div>
+          </div>
+          <details class="response">
+            <summary>Example response</summary>
+            <div class="code-card"><pre><code>[
+  {
+    <span class="tok-s">"commodity_id"</span>: 108,
+    <span class="tok-s">"top_category"</span>: <span class="tok-s">"LIVESTOCK &amp; POULTRY PRODUCTS"</span>,
+    <span class="tok-s">"sub_category"</span>: <span class="tok-s">"PORK"</span>,
+    <span class="tok-s">"group_category"</span>: <span class="tok-k">null</span>,
+    <span class="tok-s">"commodity_name"</span>: <span class="tok-s">"Belly (Liempo), Local"</span>,
+    <span class="tok-s">"specification"</span>: <span class="tok-s">"Fresh or Chilled"</span>,
+    <span class="tok-s">"unit"</span>: <span class="tok-s">"kg"</span>,
+    <span class="tok-s">"canonical_key"</span>: <span class="tok-s">"livestock &amp; poultry products|pork||belly (liempo), local|fresh or chilled|kg"</span>,
+    <span class="tok-s">"is_active"</span>: <span class="tok-k">true</span>
+  }
+  <span class="tok-c">// …more matches</span>
+]</code></pre></div>
+          </details>
+        </article>
+
+        <!-- /reports/{date} -->
+        <article class="endpoint" id="reports">
+          <div class="endpoint-title"><span class="method">GET</span><h3>/reports/{date}</h3><span class="tag">JSON</span></div>
+          <p>Where a day's prices came from: the DA file name, its SHA-256 checksum, the parser version, and the list of markets the DA surveyed.</p>
+          <div class="table-wrap">
+            <table class="ref">
+              <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>date</code><span class="req">required</span></td><td>date (path)</td><td>—</td><td>Report date, <code>YYYY-MM-DD</code>.</td></tr>
+                <tr><td><code>region</code></td><td>string</td><td><code>NCR</code></td><td>Region code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="code-card" data-tabs>
+            <div class="code-head" role="tablist" aria-label="Language">
+              <button class="tab" role="tab" data-lang="curl" aria-selected="true">cURL</button>
+              <button class="tab" role="tab" data-lang="js" aria-selected="false" tabindex="-1">JavaScript</button>
+              <button class="tab" role="tab" data-lang="python" aria-selected="false" tabindex="-1">Python</button>
+              <button class="copy" type="button">Copy</button>
+            </div>
+            <div class="panel" data-lang="curl"><pre><code>curl "<span data-base>https://your-host</span>/reports/2026-11-25"</code></pre></div>
+            <div class="panel" data-lang="js" hidden><pre><code><span class="tok-k">const</span> res = <span class="tok-k">await</span> fetch(<span class="tok-s">"<span data-base>https://your-host</span>/reports/2026-11-25"</span>);
+<span class="tok-k">const</span> report = <span class="tok-k">await</span> res.json();</code></pre></div>
+            <div class="panel" data-lang="python" hidden><pre><code><span class="tok-k">import</span> requests
+
+report = requests.get(<span class="tok-s">"<span data-base>https://your-host</span>/reports/2026-11-25"</span>).json()</code></pre></div>
+          </div>
+          <details class="response">
+            <summary>Example response</summary>
+            <div class="code-card"><pre><code>{
+  <span class="tok-s">"report_id"</span>: 4,
+  <span class="tok-s">"region_code"</span>: <span class="tok-s">"NCR"</span>,
+  <span class="tok-s">"region_name"</span>: <span class="tok-s">"National Capital Region (NCR)"</span>,
+  <span class="tok-s">"report_date"</span>: <span class="tok-s">"2026-11-25"</span>,
+  <span class="tok-s">"file_name"</span>: <span class="tok-s">"Daily-Price-Index-November-25-2026.pdf"</span>,
+  <span class="tok-s">"file_sha256"</span>: <span class="tok-s">"e01ac56f1d6b90fb405f2945ca8dc484487c4129c9dc714f6954899fd0711e2a"</span>,
+  <span class="tok-s">"covered_markets"</span>: [<span class="tok-s">"Agora Public Market"</span>, <span class="tok-s">"Balintawak Cloverleaf Market"</span>, <span class="tok-s">"Bicutan Market"</span> <span class="tok-c">/* …28 more */</span>],
+  <span class="tok-s">"covered_markets_cnt"</span>: 31,
+  <span class="tok-s">"parser_version"</span>: <span class="tok-s">"1.0.0"</span>,
+  <span class="tok-s">"parsed_at"</span>: <span class="tok-s">"2026-11-27T16:02:47.002287"</span>
+}</code></pre></div>
+          </details>
+        </article>
+
+        <!-- /health -->
+        <article class="endpoint" id="health">
+          <div class="endpoint-title"><span class="method">GET</span><h3>/health</h3><span class="tag">JSON</span></div>
+          <p>Service status and the latest report date. Not rate limited, so it's safe to use for uptime checks.</p>
+          <div class="code-card">
+            <div class="code-head"><span class="code-label">cURL</span><button class="copy" type="button">Copy</button></div>
+            <pre><code>curl "<span data-base>https://your-host</span>/health"</code></pre>
+          </div>
+          <details class="response">
+            <summary>Example response</summary>
+            <div class="code-card"><pre><code>{
+  <span class="tok-s">"status"</span>: <span class="tok-s">"ok"</span>,
+  <span class="tok-s">"service"</span>: <span class="tok-s">"DAPriceScraper"</span>,
+  <span class="tok-s">"version"</span>: <span class="tok-s">"1.0.0"</span>,
+  <span class="tok-s">"latest_report"</span>: {
+    <span class="tok-s">"report_id"</span>: 4,
+    <span class="tok-s">"parser_version"</span>: <span class="tok-s">"1.0.0"</span>,
+    <span class="tok-s">"report_date"</span>: <span class="tok-s">"2026-11-25"</span>
+  }
+}</code></pre></div>
+          </details>
+        </article>
+      </section>
+
+      <section id="mcp">
+        <h2>Use it from AI assistants (MCP)</h2>
+        <p>The API also runs an <a href="https://modelcontextprotocol.io">MCP</a> server, so Claude, Cursor, VS Code and other assistants can look up prices for you. Connect it once, then ask in plain language: <em>"How much is local liempo in Metro Manila today?"</em> or <em>"Has the price of red onions gone up this month?"</em></p>
+
+        <h3>Server URL</h3>
+        <div class="code-card">
+          <div class="code-head"><span class="code-label">MCP endpoint (Streamable HTTP)</span><button class="copy" type="button">Copy</button></div>
+          <pre><code><span data-base>https://your-host</span>/mcp</code></pre>
+        </div>
+        <p>No sign-up or API key. Calls count toward the same <a href="#rate-limits">rate limits</a> as the REST API.</p>
+
+        <h3>Connect your assistant</h3>
+        <div class="code-card" data-tabs>
+          <div class="code-head" role="tablist" aria-label="Assistant">
+            <button class="tab" role="tab" data-lang="claude" aria-selected="true">Claude</button>
+            <button class="tab" role="tab" data-lang="claude-code" aria-selected="false" tabindex="-1">Claude Code</button>
+            <button class="tab" role="tab" data-lang="cursor" aria-selected="false" tabindex="-1">Cursor</button>
+            <button class="tab" role="tab" data-lang="vscode" aria-selected="false" tabindex="-1">VS Code</button>
+            <button class="copy" type="button">Copy</button>
+          </div>
+          <div class="panel" data-lang="claude"><pre><code><span class="tok-c" data-nocopy># claude.ai or the Claude desktop app:
+# Settings → Connectors → Add custom connector, then paste this URL
+</span><span data-base>https://your-host</span>/mcp</code></pre></div>
+          <div class="panel" data-lang="claude-code" hidden><pre><code>claude mcp add --transport http dapricescraper <span data-base>https://your-host</span>/mcp</code></pre></div>
+          <div class="panel" data-lang="cursor" hidden><pre><code><span class="tok-c">// ~/.cursor/mcp.json</span>
+{
+  <span class="tok-s">"mcpServers"</span>: {
+    <span class="tok-s">"dapricescraper"</span>: {
+      <span class="tok-s">"url"</span>: <span class="tok-s">"<span data-base>https://your-host</span>/mcp"</span>
+    }
+  }
+}</code></pre></div>
+          <div class="panel" data-lang="vscode" hidden><pre><code><span class="tok-c">// .vscode/mcp.json</span>
+{
+  <span class="tok-s">"servers"</span>: {
+    <span class="tok-s">"dapricescraper"</span>: {
+      <span class="tok-s">"type"</span>: <span class="tok-s">"http"</span>,
+      <span class="tok-s">"url"</span>: <span class="tok-s">"<span data-base>https://your-host</span>/mcp"</span>
+    }
+  }
+}</code></pre></div>
+        </div>
+        <p class="muted">Other MCP clients work too: point any client that supports Streamable HTTP at the URL above. To inspect the tools yourself, run <code>npx @modelcontextprotocol/inspector</code> and connect to the same URL.</p>
+
+        <h3>Tools</h3>
+        <p>All tools are read-only. Assistants usually start with <code>search_commodities</code>, since the other tools take commodity IDs.</p>
+        <div class="table-wrap">
+          <table class="ref">
+            <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td><code>search_commodities</code></td><td>Find commodities by name, specification or sub-category (e.g. "galunggong") and get their IDs.</td></tr>
+              <tr><td><code>list_categories</code></td><td>Browse the catalog: categories, sub-categories and how many commodities each has.</td></tr>
+              <tr><td><code>get_latest_prices</code></td><td>Latest prevailing price for up to 50 commodities, with the day-over-day change.</td></tr>
+              <tr><td><code>get_price_summary</code></td><td>Min, max, median and latest price over the last 1–366 days.</td></tr>
+              <tr><td><code>get_price_history</code></td><td>Daily prices for one commodity over a date range.</td></tr>
+              <tr><td><code>get_report_info</code></td><td>The DA report a day's prices came from, its checksum and the markets surveyed, for citing sources.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <details class="response">
+          <summary>Example: what <code>get_latest_prices</code> returns to the assistant</summary>
+          <div class="code-card"><pre><code>{
+  <span class="tok-s">"region"</span>: <span class="tok-s">"NCR"</span>,
+  <span class="tok-s">"latest_report_date"</span>: <span class="tok-s">"2026-11-25"</span>,
+  <span class="tok-s">"currency"</span>: <span class="tok-s">"PHP"</span>,
+  <span class="tok-s">"prices"</span>: [
+    {
+      <span class="tok-s">"commodity_id"</span>: 36,
+      <span class="tok-s">"name"</span>: <span class="tok-s">"Roundscad (Galunggong), Local"</span>,
+      <span class="tok-s">"specification"</span>: <span class="tok-s">"Male, Medium (12-14 pcs/kg), Fresh or Chilled"</span>,
+      <span class="tok-s">"category"</span>: <span class="tok-s">"FISHERIES AND SEAFOOD"</span>,
+      <span class="tok-s">"unit"</span>: <span class="tok-s">"kg"</span>,
+      <span class="tok-s">"price"</span>: <span class="tok-s">"302.27"</span>,
+      <span class="tok-s">"available"</span>: <span class="tok-k">true</span>,
+      <span class="tok-s">"report_date"</span>: <span class="tok-s">"2026-11-25"</span>,
+      <span class="tok-s">"day_change"</span>: <span class="tok-k">null</span>,
+      <span class="tok-s">"flagged_large_change"</span>: <span class="tok-k">false</span>
+    }
+  ],
+  <span class="tok-s">"not_found"</span>: []
+}</code></pre></div>
+        </details>
+      </section>
+
+      <section id="csv">
+        <h2>CSV export</h2>
+        <p><code>/prices/latest</code> and <code>/prices</code> return RFC 4180 CSV when you add <code>?format=csv</code> or send <code>Accept: text/csv</code>. Paste the URL straight into Google Sheets with <code>=IMPORTDATA("<span data-base>https://your-host</span>/prices/latest?format=csv")</code>.</p>
+        <div class="code-card">
+          <div class="code-head"><span class="code-label">prices.csv</span></div>
+          <pre><code>report_date,commodity_id,commodity_name,top_category,sub_category,group_category,specification,unit,price_prevailing,is_available,drift_flagged,drift_pct,raw_price_text
+2026-11-25,14,Corn (White),CORN PRODUCTS,,,"Cob, Glutinous",kg,106.67,True,False,,106.67
+2026-11-25,15,Corn (Yellow),CORN PRODUCTS,,,"Cob, Sweet Corn",kg,92.85,True,False,,92.85</code></pre>
+        </div>
+      </section>
+
+      <section id="data-notes">
+        <h2>Understanding the data</h2>
+        <h3>Prevailing price</h3>
+        <p>The price most commonly observed across the surveyed markets for a commodity on that day, as reported by the DA. It isn't an average.</p>
+        <h3>Unavailable commodities</h3>
+        <p>When the DA reports a commodity as unavailable, the API returns <code>"is_available": false</code> and <code>"price_prevailing": null</code>. The original cell text is kept in <code>raw_price_text</code>. Use <code>available_only=true</code> to leave these out.</p>
+        <h3>Drift flags</h3>
+        <p>Each price is compared with the same commodity's previous price. <code>quality.drift_pct</code> holds the signed change as a fraction, so <code>0.12</code> means up 12% and <code>-0.05</code> means down 5%. It's <code>null</code> when there's no earlier price to compare with. A change of more than 50% either way also sets <code>quality.drift_flagged</code> to <code>true</code>. Flagged prices are kept, not dropped: a flag can mean a real price spike or a typo in the source PDF, so check before relying on it.</p>
+        <h3>Categories</h3>
+        <p>Commodities sit in up to three levels, mirroring the DA's tables: <code>top_category</code> (e.g. <code>LIVESTOCK &amp; POULTRY PRODUCTS</code>), <code>sub_category</code> (e.g. <code>PORK</code>) and <code>group_category</code>. Lower levels are <code>null</code> when the DA doesn't use them.</p>
+        <h3>Stable IDs</h3>
+        <p>A commodity's identity comes from its <code>canonical_key</code>: the normalized category, name, specification and unit. Whitespace or layout changes in the PDF map to the same commodity, so a <code>commodity_id</code> stays valid over time. When the DA renames a commodity outright, the maintainer can link the new name to the original ID with an alias, so its history continues under the same ID.</p>
+      </section>
+
+      <section id="self-hosting">
+        <h2>Self-hosting</h2>
+        <p>One Docker image runs both the API and the scheduled sync job. Point both at the same database.</p>
+        <div class="code-card">
+          <div class="code-head"><span class="code-label">Shell</span><button class="copy" type="button">Copy</button></div>
+          <pre><code>git clone https://github.com/Gbot-Prod/DAPriceScraper.git
+cd DAPriceScraper
+docker build -t da-dpi .
+
+<span class="tok-c"># API, including this website</span>
+docker run -p 8000:8000 -e DA_DPI_DB_URL=postgresql://... da-dpi
+
+<span class="tok-c"># Daily sync: run on a schedule (e.g. cron, twice a day)</span>
+docker run -e DA_DPI_DB_URL=postgresql://... da-dpi da-dpi run-daily</code></pre>
+        </div>
+        <p>Without Docker, <code>pip install -e .</code> gives you the <code>da-dpi</code> command: <code>da-dpi sync</code> loads data into SQLite and <code>da-dpi serve</code> starts the API. The <a href="https://github.com/Gbot-Prod/DAPriceScraper#readme">README</a> lists every configuration option.</p>
+      </section>
+
+      <section id="changelog">
+        <h2>Changelog</h2>
+        <ul class="changelog">
+          <li><span class="ver">v0.1.0</span> <span class="muted">· November 2026</span>
+            <p>First public release: latest prices, price history, price summaries, commodity catalog and report provenance, in JSON and CSV, plus an MCP server for AI assistants.</p>
+          </li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <p><strong style="color: var(--ink);">DAPriceScraper</strong> is an independent open-source project and is not affiliated with the Philippine Department of Agriculture. Price data belongs to its original publisher.</p>
+        <p style="margin: 0;">Released under the <a href="https://github.com/Gbot-Prod/DAPriceScraper/blob/main/LICENSE">MIT License</a>.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="/">Home</a>
+        <a href="/docs">Interactive explorer</a>
+        <a href="/openapi.json">OpenAPI spec</a>
+        <a href="https://github.com/Gbot-Prod/DAPriceScraper">GitHub</a>
+        <a href="https://github.com/Gbot-Prod/DAPriceScraper/issues">Report an issue</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="/static/site.js"></script>
+</body>
+</html>

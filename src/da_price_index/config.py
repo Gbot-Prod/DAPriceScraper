@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     manifest_path: Path = Path("data/manifest.json")
 
     # --- Parser ---
-    parser_version: str = "0.1.1"
+    parser_version: str = "1.0.0"
     min_expected_rows: int = 100
     max_price_threshold: float = 10_000.0
 

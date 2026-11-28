@@ -12,14 +12,19 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from mcp.server.transport_security import TransportSecuritySettings
 
 from da_price_index.config import settings
 from da_price_index.db import DatabaseRepository
 from da_price_index.exporters import prices_to_csv
+from da_price_index.mcp_server import build_mcp_server
 from da_price_index.ratelimit import RateLimiter, RateLimitMiddleware, limiter_from_settings
 from da_price_index.schemas import (
     CommodityOut,
@@ -28,6 +33,12 @@ from da_price_index.schemas import (
     PriceSummaryResponse,
     ReportProvenanceOut,
 )
+
+SITE_DIR = Path(__file__).parent / "site"
+
+# The public website and API explorer: cheap to serve, so not rate limited.
+SITE_PATHS = ("/", "/api-docs", "/docs", "/docs/oauth2-redirect", "/openapi.json", "/health")
+SITE_CACHE = {"Cache-Control": "public, max-age=300"}
 
 
 def create_app(
@@ -40,16 +51,32 @@ def create_app(
     """
     db_repo = repo or DatabaseRepository()
 
+    # MCP endpoint for AI assistants. Stateless JSON mode: every request stands
+    # alone, so there's no session state to lose on restarts. Host-header
+    # (DNS rebinding) checks are off: this is a public, read-only endpoint.
+    mcp_server = build_mcp_server(db_repo)
+    mcp_app = mcp_server.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        json_response=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # Ensure the schema exists so the API serves empty results (not 500s)
         # if it boots before the first scheduled sync has run.
         db_repo.create_tables()
-        yield
+        async with mcp_server.session_manager.run():
+            yield
 
     app = FastAPI(
-        title="DA Price Index Reference API",
-        description="Daily Prevailing Retail Price Monitoring and Commodity Reference Service",
+        title="DAPriceScraper API",
+        description=(
+            "Daily prevailing retail prices of Philippine food commodities, parsed from the "
+            "Department of Agriculture's Daily Price Index. Unofficial; not affiliated "
+            "with the DA. Guides and examples: [/api-docs](/api-docs)."
+        ),
         version=settings.parser_version,
         lifespan=lifespan,
     )
@@ -68,6 +95,8 @@ def create_app(
             RateLimitMiddleware,
             limiter=limiter,
             ip_header=settings.client_ip_header,
+            exempt_paths=SITE_PATHS,
+            exempt_prefixes=("/static/",),
         )
 
     # Public, read-only data: any origin may read it, no cookies/credentials.
@@ -75,12 +104,25 @@ def create_app(
         CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=False,
-        allow_methods=["GET", "HEAD", "OPTIONS"],
+        # POST is only used by the MCP endpoint (JSON-RPC over HTTP).
+        allow_methods=["GET", "HEAD", "OPTIONS", "POST"],
         allow_headers=["*"],
+        expose_headers=["Mcp-Session-Id", "Retry-After", "ETag"],
     )
 
     def get_repo() -> DatabaseRepository:
         return db_repo
+
+    app.mount("/static", StaticFiles(directory=SITE_DIR), name="static")
+    app.router.routes.extend(mcp_app.routes)
+
+    @app.get("/", include_in_schema=False)
+    def landing_page() -> FileResponse:
+        return FileResponse(SITE_DIR / "index.html", headers=SITE_CACHE)
+
+    @app.get("/api-docs", include_in_schema=False)
+    def api_docs_page() -> FileResponse:
+        return FileResponse(SITE_DIR / "api-docs.html", headers=SITE_CACHE)
 
     @app.get("/health", tags=["System"])
     def health_check(repository: DatabaseRepository = Depends(get_repo)) -> dict[str, Any]:

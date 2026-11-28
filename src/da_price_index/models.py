@@ -92,7 +92,7 @@ class ParsedReport(BaseModel):
     file_sha256: str = ""
     covered_markets: list[str] = Field(default_factory=list)
     items: list[ParsedPriceRow] = Field(default_factory=list)
-    parser_version: str = "0.1.0"
+    parser_version: str = "1.0.0"
 
     @property
     def covered_markets_count(self) -> int:

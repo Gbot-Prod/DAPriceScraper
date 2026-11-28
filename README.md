@@ -18,6 +18,7 @@ A standalone Python library and CLI tool (`da-dpi`) that monitors the Philippine
 - **Resilient Web Scraper:** Exponential retry backoff on network failures and transient HTTP 5xx/429 errors using `tenacity` and `httpx`.
 - **Content-Addressable Deduplication:** `SHA-256` checksums and a local JSON manifest (`data/manifest.json`) ensure zero duplicate downloads or ingestions.
 - **Relational DB Upserts:** Atomic, idempotent single-transaction upserts supporting SQLite and PostgreSQL via SQLAlchemy 2.0.
+- **MCP Server:** Lets AI assistants (Claude, Cursor, VS Code) query prices through six read-only tools at `/mcp`.
 - **HTTP Reference API:** Database-backed FastAPI service (`da-dpi serve`) with JSON/CSV responses, ETag caching, per-IP rate limiting, and commodity aliasing for DA renames.
 - **Failure Alerts:** Scheduled sync exits non-zero on any failure and posts to a Slack/Discord webhook after 2 consecutive failures.
 - **Rich CLI:** Modern command-line interface powered by `typer` and `rich`.
@@ -93,7 +94,7 @@ Available REST Endpoints:
 - `GET /prices?commodity_id=1&from=2026-11-22&to=2026-11-24` — Historical time-series prices.
 - `GET /reports/{date}` — Report provenance, hash, and covered wet markets list.
 
-Interactive OpenAPI docs are served at `/docs` once the API is running.
+The same server hosts a public website: a landing page with a live price table at `/`, a full API guide at `/api-docs`, and the interactive OpenAPI explorer at `/docs`. The site files live in [src/da_price_index/site/](src/da_price_index/site/).
 
 Example calls:
 ```bash
@@ -102,6 +103,17 @@ curl "http://localhost:8000/prices/latest?format=csv" -o latest.csv
 curl "http://localhost:8000/prices/summary?days=7&commodity_id=1&commodity_id=2"
 curl "http://localhost:8000/prices?commodity_id=1&from=2026-11-01&to=2026-11-30"
 ```
+
+### MCP server for AI assistants
+
+The API also serves an [MCP](https://modelcontextprotocol.io) endpoint at `/mcp` (Streamable HTTP, stateless, no auth), so assistants like Claude, Cursor and VS Code can query prices directly. It exposes six read-only tools: `search_commodities`, `list_categories`, `get_latest_prices`, `get_price_summary`, `get_price_history` and `get_report_info`.
+
+```bash
+# Claude Code
+claude mcp add --transport http dapricescraper https://your-host/mcp
+```
+
+Setup for other clients is on the `/api-docs#mcp` page. The tools live in [src/da_price_index/mcp_server.py](src/da_price_index/mcp_server.py).
 
 Requests are rate limited per client IP (default **60/minute, 1,000/hour, 5,000/day**; `/health` is exempt). Over the limit, the API returns `429` with a `Retry-After` header. CORS allows any origin for `GET` requests, without credentials.
 
@@ -217,10 +229,10 @@ jobs:
   sync-prices:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'

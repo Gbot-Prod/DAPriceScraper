@@ -277,3 +277,45 @@ class TestPriceSummary:
             assert res.status_code == 404
         finally:
             repo.close()
+
+
+class TestSite:
+    """The public landing page and API docs served by the app."""
+
+    def test_pages_and_assets(self, tmp_path: Path):
+        import re
+
+        repo = DatabaseRepository(db_url=f"sqlite:///{tmp_path}/site.db")
+        try:
+            repo.create_tables()
+            client = TestClient(create_app(repo))
+
+            for page in ("/", "/api-docs"):
+                res = client.get(page)
+                assert res.status_code == 200
+                assert res.headers["content-type"].startswith("text/html")
+                assert "DAPriceScraper" in res.text
+                # Every local asset a page references must exist
+                for asset in re.findall(r'(?:href|src)="(/static/[^"]+)"', res.text):
+                    assert client.get(asset).status_code == 200, asset
+
+            assert client.get("/static/site.js").headers["content-type"].startswith(
+                ("application/javascript", "text/javascript")
+            )
+            assert client.get("/static/missing.css").status_code == 404
+
+            # Site pages stay out of the API schema
+            paths = client.get("/openapi.json").json()["paths"]
+            assert "/" not in paths and "/api-docs" not in paths
+        finally:
+            repo.close()
+
+    def test_docs_anchor_links_resolve(self):
+        import re
+
+        html = (Path(__file__).parent.parent / "src/da_price_index/site/api-docs.html").read_text(
+            encoding="utf-8"
+        )
+        ids = set(re.findall(r'id="([^"]+)"', html))
+        for anchor in re.findall(r'href="#([^"]+)"', html):
+            assert anchor in ids, anchor

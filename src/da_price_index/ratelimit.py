@@ -82,11 +82,13 @@ class RateLimitMiddleware:
         limiter: RateLimiter,
         ip_header: str = "x-real-ip",
         exempt_paths: Iterable[str] = ("/health",),
+        exempt_prefixes: Iterable[str] = (),
     ) -> None:
         self.app = app
         self.limiter = limiter
         self.ip_header = ip_header.lower().encode("latin-1")
         self.exempt_paths = frozenset(exempt_paths)
+        self.exempt_prefixes = tuple(exempt_prefixes)
 
     def _client_ip(self, scope: Scope) -> str:
         for name, value in scope.get("headers", []):
@@ -98,7 +100,11 @@ class RateLimitMiddleware:
         return client[0] if client else "unknown"
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"] in self.exempt_paths:
+        if (
+            scope["type"] != "http"
+            or scope["path"] in self.exempt_paths
+            or scope["path"].startswith(self.exempt_prefixes)
+        ):
             await self.app(scope, receive, send)
             return
 

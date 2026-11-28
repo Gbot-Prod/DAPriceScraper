@@ -14,7 +14,7 @@ import json
 import logging
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlparse
 
@@ -295,7 +295,7 @@ def download_dpi_pdf(
         parsed = urlparse(url)
         orig_filename = unquote(Path(parsed.path).name) or f"dpi_{sha256_hash[:8]}.pdf"
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         base_dir = target_dir or settings.raw_pdf_dir
         dest_dir = base_dir / f"{now.year:04d}" / f"{now.month:02d}"
         dest_dir.mkdir(parents=True, exist_ok=True)
